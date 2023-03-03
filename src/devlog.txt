@@ -1,0 +1,45 @@
+I start by making a blender cylinder
+I created it using 30 sides so I could cleanly divide it in 6 slot faces
+painted a different colored dot on each slot face
+export as a glb
+
+threw the model in hyperfy and adjusted the scale/rotation until its default scale/rotation was correct (I don't want to scale in the app code)
+in hyperfy I add 3 of the cylinders and position them relative to 0,0,0 in world space so they're the correct height and spaced apart from eachother
+I can copy these position offsets into my model objects in my code and they will be positioned correctly
+
+next step is to copy the treasure chest app (so I have some base, and it has a tween script that I'll use)
+I just cleared everything out of the app and added 3 wheels and the cubes using my dry fit positons/scales
+dry fitting a cube with the "no model" cube didn't work so I had to readjust the cube positions/scales
+manually adjust cubes until it looks good enough
+
+now to the code:
+set a hard-coded spinSpeed
+set a hard-coded spinBaseRotation - basically 360 * some number of full spins we want to do
+the smaller cube will have an onClick function
+    if spinStartTime is not zero (means we are currently Spinning)
+        return early (this prevents multiple clicks)
+    randomly select a number between 1-6 for each face
+    dispatch the combination across the network, plus a time spinStartTime
+run a useeffect function whenever spinStartTime is updated
+    {
+        if spinStartTime is zero (the world updates will end before this so its not useless)
+            return early
+        play spin sound
+            basically if isPlaying, do nothing, else play()
+        set tween from current rotation to the new combination number * 60 + spinBaseRotation
+        return world onupdate()
+        {
+            if worldtime - spinStartTime > spinSpeed
+                stop spin sound
+                if all 3 numbers of the spincombination are the same 
+                    play win sound
+                else
+                    play lose sound
+                set each wheel rotation to combination number(0-5) * 60 (basically the same position except between 0-360 so the next spin also rotates the full amount)
+                dispatch a new spinStartTime of 0 - this will trigger the onupdate to unsubscribe
+            else
+                progress tween by the worldtime - spinStartTime
+                rotate to tween rotation amount
+        }
+    }
+initial spintime = 0
