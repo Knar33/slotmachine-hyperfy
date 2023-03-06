@@ -17,6 +17,8 @@ export default function TreasureChest() {
   const spinningRef = useRef();
   const payoutRef = useRef();
 
+  let worldUpdateCallback = null;
+
   //This gives us access to the state shared by all users, and a method (dispatch) to update the state for everyone
   const [state, dispatch] = useSyncState(state => state);
 
@@ -29,6 +31,10 @@ export default function TreasureChest() {
 
   //useEffect is a function that runs after every render (but only when state.spinStartTime changes value, see the end of the function)
   useEffect(() => {
+    //if spinStartTime is 0, return early because this means the server just started and nobody has spun yet (but this effect will run because the value "changed" on initialization)
+    if (state.spinStartTime === 0) {
+      return;
+    }
     console.log("state.spinStartTime has been changed, useEffect running")
 
     //objectRef.current gives us access to the actual object in this scope so we can do stuff with it
@@ -41,23 +47,7 @@ export default function TreasureChest() {
     const spinning = spinningRef.current;
     const payout = payoutRef.current;
 
-    //if the spinStartTime is 0, we are either just initializing the app or a spin action has completed its course
-    //either way we need to set the initial rotation of each wheel to the combination (the combination is 3 numbers 0-6)
-    //We multiply by 60 because the wheel is divided into 6, so we get a value between 0-360, then multiply that by DEG2RAD to convert to radians
-    //we can't leave the wheels where they are at the end of the spin because their rotation at this point is somewhere between 3600-3960
-    if (state.spinStartTime === 0) 
-    {
-      console.log("state.spinStartTime is 0 so the previous spin action is completed");
-      wheel0.setRotationX(state.spinCombination[0] * 60 * DEG2RAD);
-      wheel1.setRotationX(state.spinCombination[1] * 60 * DEG2RAD);
-      wheel2.setRotationX(state.spinCombination[2] * 60 * DEG2RAD);
-      return;
-    }
-
-    console.log("state.spinStartTime is not 0 so we are in the middle of a spin");
-    //todo: play spin sound
     spinning.play();
-
 
     //we need to create 3 empty objects and then fill them with a value using getRotation, which gives is the current rotation of each wheel
     const wheel0InitialRotation = {};
@@ -78,7 +68,7 @@ export default function TreasureChest() {
     //world.onUpdate returns a callback function that unsubscribes to the event, which we pass on as the return of the useEffect
     //if you return a callback function in a useEffect, that function will be ran right before the next useEffect runs (cleanuo) which unsubscribes to world updates
     //delta is how many seconds since the last time the world updated
-    return world.onUpdate(delta => {
+    worldUpdateCallback = world.onUpdate(delta => {
       const worldTime = world.getServerTime();
       const spinProgress = worldTime - state.spinStartTime;
       //spinProgress is how many seconds have elapsed since we pulled the lever, so if that is greater than the spinSpeed then the spin is over
@@ -101,9 +91,13 @@ export default function TreasureChest() {
           lose.play();
         }
 
+        wheel0.setRotationX(state.spinCombination[0] * 60 * DEG2RAD);
+        wheel1.setRotationX(state.spinCombination[1] * 60 * DEG2RAD);
+        wheel2.setRotationX(state.spinCombination[2] * 60 * DEG2RAD);
+
         //dispatch a state update setting state.spinStartTime to 0 - this tells alll players that the spin is completed and they need to perform cleanup and set the wheels back -3600 degrees so they spin fully next time
-        console.log("dispatching a new spinStartTime of 0 to end the spin");
-        dispatch("spin", 0, state.spinCombination);
+        console.log("Ending Spin");
+        worldUpdateCallback();
       }
       else 
       {
@@ -138,7 +132,9 @@ export default function TreasureChest() {
   {
     console.log("Spin handle clicked on");
     //This prevents multiple clicks from dispatching a bunch of new events, which would restart the animation and cause bugs
-    if (state.spinStartTime !== 0) {
+    const worldTime = world.getServerTime();
+    const spinProgress = worldTime - state.spinStartTime;
+    if (spinProgress < spinSpeed) {
       console.log("Machine is already spinning");
       return;
     }
